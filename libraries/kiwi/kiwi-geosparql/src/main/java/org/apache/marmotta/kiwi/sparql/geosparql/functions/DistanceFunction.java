@@ -95,6 +95,11 @@ public class DistanceFunction implements NativeFunction {
                  * st_AsText condition: It is to use the geometry that is the result of another function geosparql.
                  *   example: geof:distance(?geom1, geof:buffer(?geom2, 50, units:meter))
                  */
+
+                System.out.println("distance, La geometria 1 es: " + geom1);
+                System.out.println("distance, La geometria 2 es: " + geom2);
+
+
                 if (args[0].contains("POINT") || args[0].contains("MULTIPOINT") || args[0].contains("LINESTRING") || args[0].contains("MULTILINESTRING") || args[0].contains("POLYGON") || args[0].contains("MULTIPOLYGON") || args[0].contains("ST_AsText")) {
                     geom1 = String.format("ST_GeomFromText(%s,%s)", args[0], SRID_default);
                 }

@@ -129,7 +129,8 @@ public abstract class LDCacheSailProvider implements NotifyingSailProvider {
     public void updateConfig() {
         ldclientConfig.setDefaultExpiry(configurationService.getLongConfiguration("ldcache.expiry", 86400L));
         ldclientConfig.setMinimumExpiry(configurationService.getLongConfiguration("ldcache.minexpiry", 3600L));
-        ldclientConfig.setSocketTimeout(configurationService.getIntConfiguration("ldcache.so_timeout", 60000));
+        //ldclientConfig.setSocketTimeout(configurationService.getIntConfiguration("ldcache.so_timeout", 60000));
+        ldclientConfig.setSocketTimeout(configurationService.getIntConfiguration("ldcache.so_timeout", 120000));
         ldclientConfig.setConnectionTimeout(configurationService.getIntConfiguration("ldcache.connection_timeout", 10000));
         ldclientConfig.setMaxParallelRequests(configurationService.getIntConfiguration("ldcache.max_parallel_requests",10));
 

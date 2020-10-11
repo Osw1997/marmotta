@@ -37,7 +37,10 @@ import org.openrdf.query.*;
 import org.openrdf.query.algebra.*;
 import org.openrdf.query.algebra.evaluation.TripleSource;
 import org.openrdf.query.algebra.evaluation.impl.EvaluationStrategyImpl;
+import org.openrdf.query.algebra.evaluation.iterator.SilentIteration;
+import org.openrdf.query.algebra.helpers.QueryModelVisitorBase;
 import org.openrdf.query.impl.MapBindingSet;
+import org.openrdf.repository.RepositoryException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,6 +53,13 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 import org.apache.marmotta.kiwi.model.rdf.KiWiUriResource;
+
+// Se importan las librerías necesarias
+import org.apache.marmotta.kiwi.sparql.evaluation.ConsultasFederadas.FederatedService;
+import org.apache.marmotta.kiwi.sparql.evaluation.ConsultasFederadas.FederatedServiceManager;
+// Clase SERVICE
+import org.openrdf.query.algebra.Service;
+
 
 /**
  * An implementation of the SPARQL query evaluation strategy with specific extensions and optimizations. The KiWi
@@ -315,8 +325,16 @@ public class KiWiEvaluationStrategy extends EvaluationStrategyImpl{
                                         }
                                         break;
                                     case GEOMETRY:
+                                        System.out.println("Es una geometria");
+                                        System.out.println("========================");
+
                                         if (row.getObject(sv.getName()) != null) {
                                             svalue = row.getString(sv.getName());
+
+                                            System.out.println(sv.getName());
+                                            System.out.println("========================");
+                                            System.out.println(svalue.toString());
+
                                             URI type = new KiWiUriResource("http://www.opengis.net/ont/geosparql#wktLiteral");
                                             try {
                                                 long typeId = row.getLong(sv.getName() + "_TYPE");
@@ -327,6 +345,8 @@ public class KiWiEvaluationStrategy extends EvaluationStrategyImpl{
                                             }
 
                                             resultRow.addBinding(sv.getSparqlName(), new LiteralImpl(svalue, type));
+                                        } else {
+                                            System.out.println("Parece que es nulo :/");
                                         }
                                         break;
                                     case STRING:
@@ -419,6 +439,166 @@ public class KiWiEvaluationStrategy extends EvaluationStrategyImpl{
             throw new QueryEvaluationException(e);
         } catch (UnsatisfiableQueryException ex) {
             return new EmptyIteration<>();
+        }
+    }
+
+
+
+    /*
+     Se aprovecha la característica de sobrecarga de métodos para implementar el método que se encarga de llevar
+     a cabo las consultas federadas.
+     *
+     Argumentos:
+        - Service
+        - BindingSet
+     Tipo de dato que retorna: CloseableIteration<BindingSet, QueryEvaluationException>
+     */
+    public CloseableIteration<BindingSet, QueryEvaluationException> evaluate(Service service,
+                                                                             BindingSet bindings)
+            throws QueryEvaluationException
+    {
+
+        // Se crea un objeto cuyos métodos seran utiles para la extraccion de informacion sobre el SPARQL endpoint remoto.
+        Var serviceRef = service.getServiceRef();
+
+        // Se extrae la URI del SPARQL endpoint remoto a partir de la instancia que fue pasada como argumento.
+        // Y si no existe una URI asociada al SPARQL endpoint remoto, entonces extrálea de los bindings pasados como
+        // argumento.
+        String serviceUri;
+        if (serviceRef.hasValue())
+            serviceUri = serviceRef.getValue().stringValue();
+        else {
+            if (bindings != null && bindings.hasBinding(serviceRef.getName())) {
+                System.out.println("==> El serviceRef.getName() es: " + serviceRef.getName());
+                serviceUri = bindings.getBinding(serviceRef.getName()).getValue().stringValue();
+            }
+            else {
+                throw new QueryEvaluationException("SERVICE variables must be bound at evaluation time.");
+            }
+        }
+
+        // Se procede a realizar el proceso de consulta federada.
+        try {
+
+            System.out.println("La URL es " + serviceUri);
+
+            // Se crea una instancia a partir de la URI extraida
+            FederatedService fs = FederatedServiceManager.getInstance().getService(serviceUri);
+
+            // Segun lo que el usuario consulte, se crea una tabla Hash cuyo tipo de dato es String que se encargue
+            // de almacenar las variables que no se necesiten en la consulta.
+            // i.e. select ?s where { ?s ?p ?o .} -> freeVars = {?p ?o}
+            Set<String> freeVars = new HashSet<String>(service.getServiceVars());
+            freeVars.removeAll(bindings.getBindingNames());
+
+            // Crea un objeto que almacene todos los bindings que estarán presentes en la consulta federada.
+            MapBindingSet allBindings = new MapBindingSet();
+            for (Binding binding : bindings) {
+
+                System.out.println("==> El binding.getName() es: " + binding.getName());
+                System.out.println("==> El binding.getValue() es: " + binding.getValue().toString());
+                System.out.println("\n");
+
+                allBindings.addBinding(binding.getName(), binding.getValue());
+            }
+
+            // Extrae los bindings cuyo enlace ya esté definido
+            // i.e. select * where { ?subj <URI#nombreRecurso> ?obj. } -> boundVar = <URI#nombreRecurso>
+            Set<Var> boundVars = getBoundVariables(service);
+            for (Var boundVar : boundVars) {
+                // Elimina la boundVar de tal forma que no haya repeticion de a la hora de agregar el boundVar
+                // al objeto allBindings.
+                freeVars.remove(boundVar.getName());
+
+                System.out.println("==> El boundVar.getName() es: " + boundVar.getName());
+                System.out.println("==> El boundVar.getValue() es: " + boundVar.getValue().toString());
+                System.out.println("\n");
+
+                allBindings.addBinding(boundVar.getName(), boundVar.getValue());
+            }
+
+            // Se actualiza el conjunto de Bindings
+            bindings = allBindings;
+
+            // Si bien se puede tener service <SPARQL_endpoint1>{ service<SPARQL_endpoint2> { ... } },
+            // se debe de extraer la URI del SPARQL endpoint que le respecte a Apache Marmotta evaluar,
+            // lo anidado le corresponde evaluarlo al SPARQL endpoint remoto.
+            String baseUri = service.getBaseURI();
+
+            // Extrae el número de variables libres
+            String queryString = service.getQueryString(freeVars);
+
+            // Si el número de variables 'libres' es cero, significa que me intera recuperar TODAS y no solo el
+            // sujeto, predicado y objeto, lo que implica que también se deben de recuperar las variables intermedias.
+            if (freeVars.size() == 0) {
+                return fs.evaluate(queryString, bindings, baseUri, FederatedService.QueryType.ASK, service);
+            }
+
+            // Si el nnúmero de variables que se desean seleccionar son algunas, significa que es una consulta de
+            // tipo SELECT.
+            CloseableIteration<BindingSet, QueryEvaluationException> result = fs.evaluate(queryString, bindings,
+                    baseUri, FederatedService.QueryType.SELECT, service);
+
+            // Si la consulta requiere que sea "silenciosa", entonces retorna un objeto que implique que se realizó de
+            // tal manera y no los resultados que se obtuvieron. De otra forma, retorna el resultado.
+            if (service.isSilent())
+                return new SilentIteration(result);
+            else
+                return result;
+        }
+        // Error debido a una mala evaluación de la consulta.
+        catch (QueryEvaluationException e) {
+            // No muestres el error si es una consulta "silenciosa"
+            if (service.isSilent()) {
+                return new SingletonIteration<BindingSet, QueryEvaluationException>(bindings);
+            }
+            else {
+                throw e;
+            }
+        }
+        // Error debido a un error en el tiempo de ejecución.
+        catch (RuntimeException e) {
+            // No muestres el error si es una consulta "silenciosa"
+            if (service.isSilent()) {
+                return new SingletonIteration<BindingSet, QueryEvaluationException>(bindings);
+            }
+            else {
+                throw e;
+            }
+        }
+        // Error debido a un error en la conexión con el repositorio de datos
+        catch (RepositoryException e) {
+            // No muestres el error si es una consulta "silenciosa"
+            if (service.isSilent()) {
+                return new SingletonIteration<BindingSet, QueryEvaluationException>(bindings);
+            }
+            else {
+                throw new QueryEvaluationException(e);
+            }
+        }
+
+    }
+
+    // Método que extrae las variables que ya están definidas: <URI#nombreRecurso>
+    private Set<Var> getBoundVariables(Service service) {
+        // Se crea una instacia de la clase BoundVarVisitor cuyo método "meet" se encarga de extraer las variables
+        // previamente definidas en la consulta federada.
+        BoundVarVisitor visitor = new BoundVarVisitor();
+        visitor.meet(service);
+        return visitor.boundVars;
+    }
+
+
+    // Clase auxiliar para la extracción de variable previamente definidas (getBoundVariables -> BoundVarVisitor)
+    private static class BoundVarVisitor extends QueryModelVisitorBase<RuntimeException> {
+
+        private final Set<Var> boundVars = new HashSet<Var>();
+
+        @Override
+        public void meet(Var var) {
+            if (var.hasValue()) {
+                boundVars.add(var);
+            }
         }
     }
 

@@ -388,7 +388,11 @@ public class SQLBuilder {
                                     p.getConditions().add(sv.getExpressions().get(0) + " = " + sv.getAlias() + ".svalue");
                                     break;
                                 case GEOMETRY:
+                                    System.out.println("Es una geometria SQLBuilder.java");
+                                    System.out.println(sv.getExpressions().toString());
+                                    System.out.println(sv.getAlias());
                                     p.getConditions().add(sv.getExpressions().get(0) + " = " + sv.getAlias() + ".gvalue");
+                                    System.out.println("=================================");
                                     break;
                                 default:
                                     p.getConditions().add(sv.getExpressions().get(0) + " = " + pName + "." + positions[i]);

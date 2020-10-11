@@ -34,7 +34,7 @@ import org.openrdf.query.algebra.evaluation.function.FunctionRegistry;
  * The function can be called either as:
  * <ul>
  *      <li>geof:sfContains(?geometryA, ?geometryB) </li>
- * </ul>
+ * </ul> 
  * Its necesary enable postgis in your database with the next command "CREATE
  * EXTENSION postgis;" Note that for performance reasons it might be preferrable
  * to create a geometry index for your database. Please consult your database
@@ -95,6 +95,9 @@ public class SfContainsFunction implements NativeFunction {
                  * st_AsText condition: It is to use the geometry that is the result of another function geosparql.
                  *   example: geof:sfContains(?wkt, geof:buffer(?wkt2, 50, units:meter))
                  */
+                System.out.println("sfContains, La geometria 1 es: " + geom1);
+                System.out.println("sfContains, La geometria 2 es: " + geom2);
+
                 if (args[0].contains("POINT") || args[0].contains("MULTIPOINT") || args[0].contains("LINESTRING") || args[0].contains("MULTILINESTRING") || args[0].contains("POLYGON") || args[0].contains("MULTIPOLYGON") || args[0].contains("ST_AsText")) {
                     geom1 = String.format("ST_GeomFromText(%s,%s)", args[0], SRID_default);
                 }

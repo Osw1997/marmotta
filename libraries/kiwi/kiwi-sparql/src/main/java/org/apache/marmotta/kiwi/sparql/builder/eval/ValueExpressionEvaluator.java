@@ -569,6 +569,11 @@ public class ValueExpressionEvaluator extends QueryModelVisitorBase<RuntimeExcep
         // distinguish between the case where the variable is plain and the variable is bound
         SQLVariable sv = parent.getVariables().get(node.getName());
 
+        System.out.println("SQLVariable sv");
+        System.out.println("==============");
+        System.out.println(sv.getExpressions().toString());
+        System.out.println("==============");
+
         if(sv == null) {
             builder.append("NULL");
         } else if(sv.getBindings().size() > 0) {
