@@ -128,6 +128,32 @@
             <artifactId>sesame-sparql-testsuite</artifactId>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.apache.marmotta</groupId>
+            <artifactId>kiwi-reasoner</artifactId>
+        </dependency>
+
+        <!-- Dependencia necesaria para invocar la clase KiWiDatabaseRunner en las clases GeosPARQL -->
+        <!--
+        <dependency>
+            <groupId>org.apache.marmotta</groupId>
+            <artifactId>kiwi-triplestore</artifactId>
+            <version>3.4.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.marmotta</groupId>
+            <artifactId>marmotta-backend-kiwi</artifactId>
+            <version>3.4.0-SNAPSHOT</version>
+        </dependency>
+        -->
+
+        <dependency>
+            <groupId>org.apache.marmotta</groupId>
+            <artifactId>marmotta-core</artifactId>
+            <version>3.4.0-SNAPSHOT</version>
+        </dependency>
+
 
     </dependencies>
 
