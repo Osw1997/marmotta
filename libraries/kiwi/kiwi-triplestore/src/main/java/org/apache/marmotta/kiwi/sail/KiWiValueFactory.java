@@ -78,7 +78,8 @@ public class KiWiValueFactory implements ValueFactory {
         this.defaultContext = defaultContext;
     }
 
-    protected KiWiConnection aqcuireConnection() {
+    // protected KiWiConnection aqcuireConnection() {
+    public KiWiConnection aqcuireConnection() {
         try {
             KiWiConnection connection = store.getPersistence().getConnection();
             connection.setAutoCommit(true);
@@ -89,7 +90,8 @@ public class KiWiValueFactory implements ValueFactory {
         }
     }
 
-    protected void releaseConnection(KiWiConnection con) {
+    //protected void releaseConnection(KiWiConnection con) {
+    public void releaseConnection(KiWiConnection con) {
         try {
             con.close();
         } catch (SQLException ex) {

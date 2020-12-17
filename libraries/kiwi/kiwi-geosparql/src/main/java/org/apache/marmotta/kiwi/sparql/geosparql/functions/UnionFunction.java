@@ -16,6 +16,7 @@
  */
 package org.apache.marmotta.kiwi.sparql.geosparql.functions;
 
+import info.aduna.iteration.CloseableIteration;
 import org.apache.marmotta.kiwi.caching.CacheManager;
 import org.apache.marmotta.kiwi.caching.CacheManagerFactory;
 import org.apache.marmotta.kiwi.config.KiWiConfiguration;
@@ -26,11 +27,10 @@ import org.apache.marmotta.kiwi.reasoner.persistence.KiWiReasoningConnection;
 import org.apache.marmotta.kiwi.reasoner.persistence.KiWiReasoningPersistence;
 import org.apache.marmotta.kiwi.sail.KiWiSailConnection;
 import org.apache.marmotta.kiwi.sail.KiWiStore;
+import org.apache.marmotta.kiwi.sail.KiWiValueFactory;
 import org.apache.marmotta.kiwi.sparql.builder.ValueType;
 import org.apache.marmotta.kiwi.sparql.function.NativeFunction;
 import org.apache.marmotta.kiwi.vocabulary.FN_GEOSPARQL;
-
-
 
 
 //import org.apache.marmotta.platform.backend.kiwi.KiWiOptions;
@@ -42,6 +42,8 @@ import org.apache.marmotta.kiwi.vocabulary.FN_GEOSPARQL;
 
 import org.openrdf.model.Value;
 import org.openrdf.model.ValueFactory;
+import org.openrdf.query.BindingSet;
+import org.openrdf.query.QueryEvaluationException;
 import org.openrdf.query.algebra.evaluation.ValueExprEvaluationException;
 import org.openrdf.query.algebra.evaluation.function.FunctionRegistry;
 
@@ -49,9 +51,7 @@ import org.apache.marmotta.kiwi.persistence.KiWiConnection;
 import org.apache.marmotta.platform.core.api.config.ConfigurationService;
 
 
-
-import java.sql.PreparedStatement;
-import java.sql.SQLException;
+import java.sql.*;
 
 /**
  * A SPARQL function for doing a union between two geometries. Should be
@@ -78,106 +78,92 @@ public class UnionFunction implements NativeFunction {
         }
     }
 
-
-
-//    {
-//        try {
-//            connection = persistence.getConnection();
-//        } catch (SQLException e) {
-//            e.printStackTrace();
-//        }
-//    }
-
-
-
-
-
-//    private KiWiPersistence kiwiConn = new KiWiPersistence().getConnection();
-//    private KiWiConnection connection;
-//
-//    {
-//        try {
-//            connection = new KiWiConnection(kiwiConn, myDP, cacheManager);
-//        } catch (SQLException e) {
-//            e.printStackTrace();
-//        }
-//    }
-
     public String parseToString(Value arg) {
         String[] geoData = arg.toString().split("\\^\\^", 2);
-        /*
-        for (String _ : geoData) {
-            System.out.println("Value: " + _);
-        }
-         */
-        return geoData[0];
+        return geoData[0].replace("\"", "'");
     }
+
+    protected String result = "";
 
     @Override
     public Value evaluate(ValueFactory valueFactory, Value... args) throws ValueExprEvaluationException {
+    //public CloseableIteration<BindingSet, QueryEvaluationException> evaluate(ValueFactory valueFactory, Value... args) throws ValueExprEvaluationException {
 
-    //private Object PostgreSQLDialect;
+        PostgreSQLDialect dialect = new PostgreSQLDialect();
 
-    Object KiWiDialect;
-    CacheManager cacheManager;
-    //private PostgreSQLDialect myPD;
-    PostgreSQLDialect dialect = new PostgreSQLDialect();
+        KiWiValueFactory modVF = (KiWiValueFactory) valueFactory;
 
+        KiWiConnection kc = modVF.aqcuireConnection();
+        try {
+            Connection pgc = kc.getJDBCConnection();
 
-
-
-    // Falta conseguir la conexion
-    // Asi que se necesita crear un nuevo objeto tipo KiWiPerstence con los valores necesarios ya sea con 4 parametros
-    // o mediante un objeto llamado configuration que va como argumento en new KiWiPersistence()
-
-    // private KiWiReasoningPersistence persistence;
-
-    //
-    ConfigurationService configurationService = null;
-/*
-    String jdbcUrl = configurationService.getStringConfiguration(KiWiOptions.DATABASE_URL);
-    String dbUser  = configurationService.getStringConfiguration(KiWiOptions.DATABASE_USER);
-    String dbPass  = configurationService.getStringConfiguration(KiWiOptions.DATABASE_PASSWORD);
-    */
-
-    String jdbcUrl = "jdbc:postgresql://localhost:5432/marmotta?prepareThreshold=3";
-    String dbUser  = "marmotta";
-    String dbPass  = "ProyectoTerminal2";
-
-    KiWiConfiguration configuration = new KiWiConfiguration(configurationService.getStringConfiguration(KiWiOptions.CLUSTERING_NAME, "Marmotta") + " KiWi", jdbcUrl, dbUser, dbPass, dialect, configurationService.getDefaultContext(), configurationService.getInferredContext());
-
-    /*private KiWiPersistence persistence = new KiWiPersistence(configuration, );
-
-    private KiWiReasoningPersistence myKP = new KiWiReasoningPersistence();
-    KiWiReasoningConnection connection =*/
-
-        System.out.println("La configuracion es: ");
-        System.out.println("jdbcUrl: " + jdbcUrl);
-        System.out.println("dbUser: " + dbUser);
-        System.out.println("dbPass: " + dbPass);
-
-        String arg1 = parseToString(args[0]);
-        String arg2 = parseToString(args[1]);
-        System.out.println("Value 1 is: " + arg1);
-        System.out.println("Value 2 is: " + arg2);
+            String arg1 = parseToString(args[0]);
+            String arg2 = parseToString(args[1]);
+            System.out.println("Value 1 is: " + arg1);
+            System.out.println("Value 2 is: " + arg2);
 
 
-        //String sqlFunctionGeo = this.getNative((KiWiDialect) PostgreSQLDialect, arg1, arg2);
-        String sqlFunctionGeo = this.getNative(dialect, arg1, arg2);
-        System.out.println("Parsed Geo: " + sqlFunctionGeo);
+            //String sqlFunctionGeo = this.getNative((KiWiDialect) PostgreSQLDialect, arg1, arg2);
+            String sqlFunctionGeo = this.getNative(dialect, arg1, arg2);
+            System.out.println("Parsed Geo: " + sqlFunctionGeo);
 
-        String builtQuery = "SELECT " + sqlFunctionGeo + " as resultado";
-        System.out.println("Final query: " + builtQuery);
+            String builtQuery = "SELECT " + sqlFunctionGeo + " as resultado";
+            System.out.println("Final query: " + builtQuery);
 
 
-        /*try {
-            PreparedStatement queryStatement = connection.getJDBCConnection().prepareStatement(builtQuery);
-            System.out.println("Final: " + queryStatement.toString());
+            try {
+                PreparedStatement queryStatement = pgc.prepareStatement(builtQuery);
+                /*
+                System.out.println("Final: " + queryStatement.toString());
+                System.out.println("Tipo: " + queryStatement.getClass().getName());
+                System.out.println(queryStatement);
+                 */
+
+                ResultSet results = queryStatement.executeQuery();
+                /*
+                System.out.println("Final: " + results.toString());
+                System.out.println("Tipo: " + results.toString());
+                System.out.println(results);
+                 */
+
+                //result = results.getString(0);
+                //System.out.println("Resultado: " + result);
+
+
+                ResultSetMetaData rsmd = results.getMetaData();
+                int columnsNumber = rsmd.getColumnCount();
+                while (results.next()) {
+                    for (int i = 1; i <= columnsNumber; i++) {
+                        result = results.getString(i);
+                        System.out.println("Resultado: " + result + " || " + rsmd.getColumnName(i));
+                    }
+                    System.out.println("");
+                }
+
+
+                System.out.println("FIN :)");
+            } catch (SQLException e) {
+                System.out.println("Error queryStatement: " + e.toString());
+                e.printStackTrace();
+            }
+
+            // Se cierra la conexion
+            pgc.close();
+            modVF.releaseConnection(kc);
+
+            // Se convierte a value
+            Value valueResult = new Value() {
+                @Override
+                public String stringValue() {
+                    return result;
+                }
+            };
+
+            return valueResult;
+
         } catch (SQLException e) {
-            System.out.println("Error queryStatement: " + e.toString());
             e.printStackTrace();
-        }*/
-
+        }
         throw new UnsupportedOperationException("cannot evaluate in-memory, needs to be supported by the database");
     }
 
