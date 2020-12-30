@@ -20,6 +20,7 @@ import info.aduna.iteration.CloseableIteration;
 import org.apache.marmotta.kiwi.caching.CacheManager;
 import org.apache.marmotta.kiwi.caching.CacheManagerFactory;
 import org.apache.marmotta.kiwi.config.KiWiConfiguration;
+import org.apache.marmotta.kiwi.model.rdf.KiWiUriResource;
 import org.apache.marmotta.kiwi.persistence.KiWiDialect;
 import org.apache.marmotta.kiwi.persistence.KiWiPersistence;
 import org.apache.marmotta.kiwi.persistence.pgsql.PostgreSQLDialect;
@@ -37,11 +38,10 @@ import org.apache.marmotta.kiwi.vocabulary.FN_GEOSPARQL;
 //import org.apache.marmotta.platform.backend.kiwi.KiWiStoreProvider;
 
 
-
-
-
+import org.openrdf.model.URI;
 import org.openrdf.model.Value;
 import org.openrdf.model.ValueFactory;
+import org.openrdf.model.impl.LiteralImpl;
 import org.openrdf.query.BindingSet;
 import org.openrdf.query.QueryEvaluationException;
 import org.openrdf.query.algebra.evaluation.ValueExprEvaluationException;
@@ -50,6 +50,7 @@ import org.openrdf.query.algebra.evaluation.function.FunctionRegistry;
 import org.apache.marmotta.kiwi.persistence.KiWiConnection;
 import org.apache.marmotta.platform.core.api.config.ConfigurationService;
 
+import org.apache.marmotta.kiwi.sparql.geosparql.connectionToPostgres.evaluateWithoutIndexing;
 
 import java.sql.*;
 
@@ -78,93 +79,103 @@ public class UnionFunction implements NativeFunction {
         }
     }
 
-    public String parseToString(Value arg) {
+    // Function that returns the pure geometry from an argument
+    private String parseToString(Value arg) {
         String[] geoData = arg.toString().split("\\^\\^", 2);
         return geoData[0].replace("\"", "'");
     }
 
-    protected String result = "";
+    // protected String result = "";
 
     @Override
     public Value evaluate(ValueFactory valueFactory, Value... args) throws ValueExprEvaluationException {
-    //public CloseableIteration<BindingSet, QueryEvaluationException> evaluate(ValueFactory valueFactory, Value... args) throws ValueExprEvaluationException {
 
+        // Create a new Postgres dialect
         PostgreSQLDialect dialect = new PostgreSQLDialect();
+        // Get pure geometries from arguments
+        String arg1 = parseToString(args[0]);
+        String arg2 = parseToString(args[1]);
 
-        KiWiValueFactory modVF = (KiWiValueFactory) valueFactory;
+        // Translate the geometries into Postgres dialect
+        String sqlFunctionGeo = this.getNative(dialect, arg1, arg2);
 
-        KiWiConnection kc = modVF.aqcuireConnection();
-        try {
-            Connection pgc = kc.getJDBCConnection();
+        evaluateWithoutIndexing q = new evaluateWithoutIndexing();
 
-            String arg1 = parseToString(args[0]);
-            String arg2 = parseToString(args[1]);
-            System.out.println("Value 1 is: " + arg1);
-            System.out.println("Value 2 is: " + arg2);
-
-
-            //String sqlFunctionGeo = this.getNative((KiWiDialect) PostgreSQLDialect, arg1, arg2);
-            String sqlFunctionGeo = this.getNative(dialect, arg1, arg2);
-            System.out.println("Parsed Geo: " + sqlFunctionGeo);
-
-            String builtQuery = "SELECT " + sqlFunctionGeo + " as resultado";
-            System.out.println("Final query: " + builtQuery);
+        return q.evaluateQuery(sqlFunctionGeo, valueFactory);
 
 
-            try {
-                PreparedStatement queryStatement = pgc.prepareStatement(builtQuery);
-                /*
-                System.out.println("Final: " + queryStatement.toString());
-                System.out.println("Tipo: " + queryStatement.getClass().getName());
-                System.out.println(queryStatement);
-                 */
 
-                ResultSet results = queryStatement.executeQuery();
-                /*
-                System.out.println("Final: " + results.toString());
-                System.out.println("Tipo: " + results.toString());
-                System.out.println(results);
-                 */
+//        PostgreSQLDialect dialect = new PostgreSQLDialect();
+//        KiWiValueFactory modVF = (KiWiValueFactory) valueFactory;
+//
+//        KiWiConnection kc = modVF.aqcuireConnection();
+//        try {
+//            Connection pgc = kc.getJDBCConnection();
+//
+//            String arg1 = parseToString(args[0]);
+//            String arg2 = parseToString(args[1]);
+//            System.out.println("Value 1 is: " + arg1);
+//            System.out.println("Value 2 is: " + arg2);
+//
+//
+//            //String sqlFunctionGeo = this.getNative((KiWiDialect) PostgreSQLDialect, arg1, arg2);
+//            String sqlFunctionGeo = this.getNative(dialect, arg1, arg2);
+//            System.out.println("Parsed Geo: " + sqlFunctionGeo);
+//
+//            String builtQuery = "SELECT " + sqlFunctionGeo + " as resultado";
+//            System.out.println("Final query: " + builtQuery);
+//
+//
+//            try {
+//                PreparedStatement queryStatement = pgc.prepareStatement(builtQuery);
+//                /*
+//                System.out.println("Final: " + queryStatement.toString());
+//                System.out.println("Tipo: " + queryStatement.getClass().getName());
+//                System.out.println(queryStatement);
+//                 */
+//
+//                ResultSet results = queryStatement.executeQuery();
+//                /*
+//                System.out.println("Final: " + results.toString());
+//                System.out.println("Tipo: " + results.toString());
+//                System.out.println(results);
+//                 */
+//
+//                //result = results.getString(0);
+//                //System.out.println("Resultado: " + result);
+//
+//
+//                ResultSetMetaData rsmd = results.getMetaData();
+//                int columnsNumber = rsmd.getColumnCount();
+//                while (results.next()) {
+//                    for (int i = 1; i <= columnsNumber; i++) {
+//                            result = results.getString(i);
+//                        System.out.println("Resultado: " + result + " || " + rsmd.getColumnName(i));
+//                    }
+//                    System.out.println("");
+//                }
+//
+//
+//                System.out.println("FIN :)");
+//            } catch (SQLException e) {
+//                System.out.println("Error queryStatement: " + e.toString());
+//                e.printStackTrace();
+//            }
+//
+//            // Se cierra la conexion
+//            pgc.close();
+//            modVF.releaseConnection(kc);
+//
+//            URI type = new KiWiUriResource("http://www.opengis.net/ont/geosparql#wktLiteral");
+//            Value valueResult = new LiteralImpl(result, type);
+//
+//            return valueResult;
+//
+//        } catch (SQLException e) {
+//            e.printStackTrace();
+//        }
 
-                //result = results.getString(0);
-                //System.out.println("Resultado: " + result);
-
-
-                ResultSetMetaData rsmd = results.getMetaData();
-                int columnsNumber = rsmd.getColumnCount();
-                while (results.next()) {
-                    for (int i = 1; i <= columnsNumber; i++) {
-                        result = results.getString(i);
-                        System.out.println("Resultado: " + result + " || " + rsmd.getColumnName(i));
-                    }
-                    System.out.println("");
-                }
-
-
-                System.out.println("FIN :)");
-            } catch (SQLException e) {
-                System.out.println("Error queryStatement: " + e.toString());
-                e.printStackTrace();
-            }
-
-            // Se cierra la conexion
-            pgc.close();
-            modVF.releaseConnection(kc);
-
-            // Se convierte a value
-            Value valueResult = new Value() {
-                @Override
-                public String stringValue() {
-                    return result;
-                }
-            };
-
-            return valueResult;
-
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-        throw new UnsupportedOperationException("cannot evaluate in-memory, needs to be supported by the database");
+        //throw new UnsupportedOperationException("cannot evaluate in-memory, needs to be supported by the database");
     }
 
     @Override
